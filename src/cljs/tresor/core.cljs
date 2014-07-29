@@ -62,13 +62,12 @@
 
 ;; --- random string generator ---
 
-(def chars (map char (range 33 127)))
+(def some-chars (map char (range 33 127)))
 
 (defn random-char [] (rand-nth chars))
 
 (defn create-random-string [length]
   (clojure.string/join (vec (take length (repeatedly random-char)))))
-
 
 
 ;; --- datascript magics ---
@@ -148,8 +147,6 @@
    {:target (. js/document (getElementById "center-container"))})
 
   )
-
-
 
 
 
