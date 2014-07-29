@@ -15,7 +15,8 @@
             [kioo.core :refer [handle-wrapper]]
             [om.core :as om :include-macros true]
             [om.dom :as omdom])
-  (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
+  (:require-macros [kioo.om :refer [defsnippet deftemplate]]
+                   [cljs.core.async.macros :refer [go go-loop]]))
 
 
 (enable-console-print!)
@@ -63,34 +64,88 @@
 (def trusted-hosts (atom #{:geschichte.stage/stage (.getDomain uri)}))
 
 
+
+
 (defn- auth-fn [users]
   (go (js/alert (pr-str "AUTH-REQUIRED: " users))
     {"eve@polyc0l0r.net" "lisp"}))
 
-  (go
-    (def store (<! (new-mem-store
-                    (atom
-                     (read-string
-                      "{#uuid \"10b9b659-16b9-5731-b138-81b81cb7db05\" #datascript/DB {:schema {:passwords {:db/cardinality :db.cardinality/many}, :domains {:db/cardinality :db.cardinality/many}}, :datoms []}, #uuid \"123ed64b-1e25-59fc-8c5b-038636ae6c3d\" (fn replace [old params] params), #uuid \"1400dd5a-eee8-5edc-b12e-cbba25429ba0\" {:transactions [[#uuid \"10b9b659-16b9-5731-b138-81b81cb7db05\" #uuid \"123ed64b-1e25-59fc-8c5b-038636ae6c3d\"]], :parents [], :ts #inst \"2014-07-29T10:52:38.572-00:00\", :author \"eve@tresor.net\"}, \"eve@tresor.net\" {#uuid \"11db6582-e734-4464-a710-6a2bfb502229\" {:description \"tresor security services.\", :schema {:type \"http://github.com/ghubber/geschichte\", :version 1}, :pull-requests {}, :causal-order {#uuid \"1400dd5a-eee8-5edc-b12e-cbba25429ba0\" []}, :public false, :branches {\"master\" #{#uuid \"1400dd5a-eee8-5edc-b12e-cbba25429ba0\"}}, :head \"master\", :last-update #inst \"2014-07-29T10:52:38.572-00:00\", :id #uuid \"11db6582-e734-4464-a710-6a2bfb502229\"}}}")
-                     (atom {'datascript/Datom datascript/datom-from-reader
-                            'datascript/DB datascript/db-from-reader})))))
 
-    (def peer (client-peer "CLIENT-PEER" store (partial auth store auth-fn (fn [creds] nil) trusted-hosts)))
+(defn get-passwords [stage]
+  (let [db (om/value (get-in stage ["eve@tresor.net"  #uuid "11db6582-e734-4464-a710-6a2bfb502229" "master"]))
+        query  '[:find ?p ?domain ?username ?password ?user-id ?created-at ?expired
+                 :where
+                 [?p :domain ?domain]
+                 [?p :username ?username]
+                 [?p :password ?password]
+                 [?p :user-id ?user-id]
+                 [?p :created-at ?created-at]
+                 [?p :expired ?expired]]]
+    (mapv (partial zipmap [:id :domain :username :password :user-id :created-at :expired])
+         (d/q query db))))
 
-    (def stage (<! (s/create-stage! "eve@tresor.net" peer eval-fn)))
 
-    (<! (s/subscribe-repos! stage
+(defsnippet password "templates/passwords.html" [:.pw-item]
+  [pw owner]
+  {[:.pw-domain] (content (:domain pw))
+   [:.pw-username] (content (:username pw))
+   [:.pw-password] (content (:password pw))
+   [:.pw-created-at] (content (.toLocaleString (:created-at pw)))
+   [:.pw-expired] (content (.toLocaleString (:expired pw)))})
+
+
+
+(deftemplate passwords "templates/passwords.html"
+  [app owner]
+  {[:#password-list] (content (map #(password % owner) (get-passwords app)))})
+
+(defn password-view
+  [app owner]
+  (reify
+    om/IRender
+    (render [this]
+      (passwords app owner))))
+
+
+;; --- *hust* start all services *hust* ---
+
+(go
+  (def store (<! (new-mem-store
+                  (atom
+                   (read-string
+                    "{#uuid \"10b9b659-16b9-5731-b138-81b81cb7db05\" #datascript/DB {:schema {:passwords {:db/cardinality :db.cardinality/many}, :domains {:db/cardinality :db.cardinality/many}}, :datoms []}, #uuid \"123ed64b-1e25-59fc-8c5b-038636ae6c3d\" (fn replace [old params] params), #uuid \"1400dd5a-eee8-5edc-b12e-cbba25429ba0\" {:transactions [[#uuid \"10b9b659-16b9-5731-b138-81b81cb7db05\" #uuid \"123ed64b-1e25-59fc-8c5b-038636ae6c3d\"]], :parents [], :ts #inst \"2014-07-29T10:52:38.572-00:00\", :author \"eve@tresor.net\"}, \"eve@tresor.net\" {#uuid \"11db6582-e734-4464-a710-6a2bfb502229\" {:description \"tresor security services.\", :schema {:type \"http://github.com/ghubber/geschichte\", :version 1}, :pull-requests {}, :causal-order {#uuid \"1400dd5a-eee8-5edc-b12e-cbba25429ba0\" []}, :public false, :branches {\"master\" #{#uuid \"1400dd5a-eee8-5edc-b12e-cbba25429ba0\"}}, :head \"master\", :last-update #inst \"2014-07-29T10:52:38.572-00:00\", :id #uuid \"11db6582-e734-4464-a710-6a2bfb502229\"}}}")
+                   (atom {'datascript/Datom datascript/datom-from-reader
+                          'datascript/DB datascript/db-from-reader})))))
+
+  (def peer (client-peer "CLIENT-PEER" store (partial auth store auth-fn (fn [creds] nil) trusted-hosts)))
+
+  (def stage (<! (s/create-stage! "eve@tresor.net" peer eval-fn)))
+
+  (<! (s/subscribe-repos! stage
                           {"eve@tresor.net"
                            {#uuid "11db6582-e734-4464-a710-6a2bfb502229"
                             #{"master"}}}))
-    (<! (s/connect!
+  (<! (s/connect!
        stage
        (str
         (if ssl?  "wss://" "ws://")
         (.getDomain uri)
         (when (= (.getDomain uri) "localhost")
           (str ":" 8085 #_(.getPort uri)))
-        "/geschichte/ws"))))
+        "/geschichte/ws")))
+
+
+  (om/root
+   password-view
+   (get-in @stage [:volatile :val-atom])
+   {:target (. js/document (getElementById "center-container"))})
+
+
+  )
+
+
+
+
 
 (comment
   ;; recreate database

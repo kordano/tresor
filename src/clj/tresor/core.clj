@@ -74,8 +74,7 @@
                               "/geschichte/ws")
                          tag-table)
                         store
-                        (partial auth store auth-fn cred-fn (atom (or (:trusted-hosts @state)
-                                                                      #{}))))))
+                        (partial auth store auth-fn cred-fn (atom (or (:trusted-hosts @state) #{}))))))
   state)
 
 (defroutes handler
