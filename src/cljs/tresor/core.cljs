@@ -20,6 +20,9 @@
 
 (enable-console-print!)
 
+
+(println "ALL HAIL TO THE LAMBDA!")
+
 (def uri (goog.Uri. js/location.href))
 
 (def ssl? (= (.getScheme uri) "https"))
@@ -103,10 +106,42 @@
 
   (go (<! (s/transact stage
                       ["eve@tresor.net"
-                       "11db6582-e734-4464-a710-6a2bfb502229"
+                       #uuid "11db6582-e734-4464-a710-6a2bfb502229"
+                       "master"]
+                      (concat
+                       [{:db/id (uuid)
+                         :domain "https://accounts.google.com"
+                         :username "fuerstgivo"
+                         :password "56789"
+                         :user-id "kordano@topiq.es"
+                         :created-at (js/Date.)
+                         :expired (js/Date. 2014 7 29)}]
+                       [{:db/id (uuid)
+                         :domain "https://accounts.google.com"
+                         :username "konnykuehne"
+                         :password "123456"
+                         :user-id "kordano@topiq.es"
+                         :created-at (js/Date.)
+                         :expired (js/Date. 2014 7 29)}])
+                      '(fn [old params] (:db-after (d/transact old params)))))
+    (<! (s/commit! stage {"eve@tresor.net" {#uuid "11db6582-e734-4464-a710-6a2bfb502229" #{"master"}}})))
 
-                       ])))
+
+  (let [db (get-in (-> @stage :volatile :val-atom deref)["eve@tresor.net"  #uuid "11db6582-e734-4464-a710-6a2bfb502229" "master"])
+        query  '[:find ?p ?domain ?username ?password ?user-id ?created-at ?expired
+                 :where
+                 [?p :domain ?domain]
+                 [?p :username ?username]
+                 [?p :password ?password]
+                 [?p :user-id ?user-id]
+                 [?p :created-at ?created-at]
+                 [?p :expired ?expired]]]
+    (map (partial zipmap [:id :domain :username :password :user-id :created-at :expired])
+         (d/q query db)))
 
   (-> @stage :volatile :peer deref :volatile :store :state deref)
+
+  (-> @stage :volatile :val-atom deref)
+
 
 )
