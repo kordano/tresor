@@ -69,26 +69,30 @@
 (defn create-random-string [length]
   (clojure.string/join (vec (take length (repeatedly random-char)))))
 
+(def url-regexp #"(https?|ftp)://[a-z0-9\u00a1-\uffff-]+(\.[a-z0-9\u00a1-\uffff-]+)+(:\d{2,5})?")
 
 ;; --- datascript magics ---
 
 (defn get-passwords [stage]
   (let [db (om/value (get-in stage ["eve@tresor.net"  #uuid "11db6582-e734-4464-a710-6a2bfb502229" "master"]))
-        query  '[:find ?p ?domain ?username ?password ?user-id ?created-at ?expired
+        query  '[:find ?p ?domain ?username ?password ?url ?user-id ?created-at ?expired
                  :where
                  [?p :domain ?domain]
                  [?p :username ?username]
                  [?p :password ?password]
+                 [?p :url ?url]
                  [?p :user-id ?user-id]
                  [?p :created-at ?created-at]
                  [?p :expired ?expired]]]
-    (mapv (partial zipmap [:id :domain :username :password :user-id :created-at :expired])
+    (mapv (partial zipmap [:id :domain :username :password :url :user-id :created-at :expired])
           (d/q query db))))
+
 
 (defn add-password [owner]
   (let [stage (om/get-state owner :stage)
         username (om/get-state owner :username-input-text)
-        domain (om/get-state owner :domain-input-text)
+        url (om/get-state owner :url-input-text)
+        domain (first (re-find url-regexp (om/get-state owner :url-input-text)))
         password (om/get-state owner :password-input-text)]
     (go
       (<! (s/transact
@@ -98,6 +102,7 @@
              :domain domain
              :username username
              :password password
+             :url url
              :user-id (uuid "kordano@topiq.es")
              :created-at (js/Date.)
              :expired (js/Date. 2015 0 0)}]
@@ -116,22 +121,21 @@
   {[:.pw-domain] (content (:domain pw))
    [:.pw-username] (content (:username pw))
    [:.pw-password] (content (apply str (repeat (count (:password pw)) "*")))
-   [:.pw-created-at] (content (.toLocaleString (:created-at pw)))
-   [:.pw-expired] (content (.toLocaleString (:expired pw)))})
+   [:.pw-url] (content (apply str (take 20 (:url pw))))})
 
 
 (deftemplate passwords "templates/passwords.html"
   [app owner state]
   {[:#password-list] (content (map #(password % owner) (get-passwords app)))
-   [:#pw-domain-input] (do-> (set-attr :value (:domain-input-text state))
-                             (listen :on-change #(handle-text-change % owner :domain-input-text)))
+   [:#pw-url-input] (do-> (set-attr :value (:url-input-text state))
+                             (listen :on-change #(handle-text-change % owner :url-input-text)))
    [:#pw-username-input] (do-> (set-attr :value (:username-input-text state))
                                (listen :on-change #(handle-text-change % owner :username-input-text)))
    [:#pw-password-input] (do-> (set-attr :value (:password-input-text state))
                                (listen :on-change #(handle-text-change % owner :password-input-text)))
    [:#modal-new-pw-btn] (listen :on-click #(do
                                              (add-password owner)
-                                             (om/set-state! owner :domain-input-text "")
+                                             (om/set-state! owner :url-input-text "")
                                              (om/set-state! owner :username-input-text "")
                                              (om/set-state! owner :password-input-text "")))})
 
@@ -172,7 +176,7 @@
     (reify
       om/IInitState
       (init-state [_]
-        {:domain-input-text ""
+        {:url-input-text ""
          :username-input-text ""
          :stage stage
          :password-input-text ""})
@@ -214,22 +218,20 @@
 
 
   (let [db (get-in (-> @stage :volatile :val-atom deref) ["eve@tresor.net"  #uuid "11db6582-e734-4464-a710-6a2bfb502229" "master"])
-        query  '[:find ?p ?domain ?username ?password ?user-id ?created-at ?expired
+        query  '[:find ?p ?domain ?username ?password ?url ?user-id ?created-at ?expired
                  :where
                  [?p :domain ?domain]
                  [?p :username ?username]
                  [?p :password ?password]
+                 [?p :url ?url]
                  [?p :user-id ?user-id]
                  [?p :created-at ?created-at]
                  [?p :expired ?expired]]]
-    (map (partial zipmap [:id :domain :username :password :user-id :created-at :expired])
+    (map (partial zipmap [:id :domain :username :password :url :user-id :created-at :expired])
          (d/q query db)))
 
   (-> @stage :volatile :peer deref :volatile :store :state deref)
 
   (-> @stage :volatile :val-atom deref)
-
-
-
 
  )
