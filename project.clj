@@ -24,7 +24,6 @@
                  [enlive "1.1.5"]
                  [compojure "1.1.6"]
 
-                 [domina "1.0.2"]
                  [prismatic/dommy "0.1.2"]
                  [datascript "0.1.6"]
                  [om "0.6.3"]

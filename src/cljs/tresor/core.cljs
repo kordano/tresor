@@ -1,7 +1,5 @@
 (ns tresor.core
-  (:require [clojure.data :refer [diff]]
-            [domina :as dom]
-            [figwheel.client :as figw :include-macros true]
+  (:require [figwheel.client :as figw :include-macros true]
             [weasel.repl :as ws-repl]
             [hasch.core :refer [uuid]]
             [datascript :as d]
@@ -21,8 +19,7 @@
 
 (enable-console-print!)
 
-
-(println "ALL HAIL TO THE LAMBDA!")
+(println "ALL HAIL TO KONNY!")
 
 (def uri (goog.Uri. js/location.href))
 
@@ -47,11 +44,8 @@
 
 
 (def eval-fn {'(fn replace [old params] params) (fn replace [old params] params)
-              '(fn [old params]
-                 (:db-after (d/transact old params)))
-              (fn [old params]
-                (:db-after (d/transact old params)))})
-
+              '(fn [old params] (:db-after (d/transact old params)))
+              (fn [old params] (:db-after (d/transact old params)))})
 
 
 ; we can do this runtime wide here, since we only use this datascript version
@@ -59,17 +53,25 @@
 (read/register-tag-parser! 'datascript/Datom datascript/datom-from-reader)
 
 
-
-
 (def trusted-hosts (atom #{:geschichte.stage/stage (.getDomain uri)}))
-
-
-
 
 (defn- auth-fn [users]
   (go (js/alert (pr-str "AUTH-REQUIRED: " users))
     {"eve@polyc0l0r.net" "lisp"}))
 
+
+;; --- random string generator ---
+
+(def chars (map char (range 33 127)))
+
+(defn random-char [] (rand-nth chars))
+
+(defn create-random-string [length]
+  (clojure.string/join (vec (take length (repeatedly random-char)))))
+
+
+
+;; --- datascript magics ---
 
 (defn get-passwords [stage]
   (let [db (om/value (get-in stage ["eve@tresor.net"  #uuid "11db6582-e734-4464-a710-6a2bfb502229" "master"]))
@@ -85,6 +87,8 @@
          (d/q query db))))
 
 
+;; --- html templating ---
+
 (defsnippet password "templates/passwords.html" [:.pw-item]
   [pw owner]
   {[:.pw-domain] (content (:domain pw))
@@ -94,12 +98,15 @@
    [:.pw-expired] (content (.toLocaleString (:expired pw)))})
 
 
-
 (deftemplate passwords "templates/passwords.html"
   [app owner]
   {[:#password-list] (content (map #(password % owner) (get-passwords app)))})
 
+
+;; --- views ---
+
 (defn password-view
+  "Main list view showing domain, account, password, creation and expiry date"
   [app owner]
   (reify
     om/IRender
@@ -107,7 +114,7 @@
       (passwords app owner))))
 
 
-;; --- *hust* start all services *hust* ---
+;; --- *hust* (start-all-services) *hust* ---
 
 (go
   (def store (<! (new-mem-store
@@ -125,6 +132,7 @@
                           {"eve@tresor.net"
                            {#uuid "11db6582-e734-4464-a710-6a2bfb502229"
                             #{"master"}}}))
+
   (<! (s/connect!
        stage
        (str
@@ -134,12 +142,10 @@
           (str ":" 8085 #_(.getPort uri)))
         "/geschichte/ws")))
 
-
   (om/root
    password-view
    (get-in @stage [:volatile :val-atom])
    {:target (. js/document (getElementById "center-container"))})
-
 
   )
 
@@ -148,41 +154,30 @@
 
 
 (comment
-  ;; recreate database
-  (let [schema {:passwords {:db/cardinality :db.cardinality/many}
-                :domains {:db/cardinality :db.cardinality/many}}
-        conn   (d/create-conn schema)]
-    (go
-      (println (<! (s/create-repo! stage
-                                   "eve@tresor.net"
-                                   "tresor security services."
-                                   @conn
-                                   "master")))))
 
-  (go (<! (s/transact stage
-                      ["eve@tresor.net"
-                       #uuid "11db6582-e734-4464-a710-6a2bfb502229"
-                       "master"]
-                      (concat
-                       [{:db/id (uuid)
-                         :domain "https://accounts.google.com"
-                         :username "fuerstgivo"
-                         :password "56789"
-                         :user-id "kordano@topiq.es"
-                         :created-at (js/Date.)
-                         :expired (js/Date. 2014 7 29)}]
-                       [{:db/id (uuid)
-                         :domain "https://accounts.google.com"
-                         :username "konnykuehne"
-                         :password "123456"
-                         :user-id "kordano@topiq.es"
-                         :created-at (js/Date.)
-                         :expired (js/Date. 2014 7 29)}])
-                      '(fn [old params] (:db-after (d/transact old params)))))
+  (go
+    (<! (s/transact
+         stage
+         ["eve@tresor.net" #uuid "11db6582-e734-4464-a710-6a2bfb502229" "master"]
+         (concat [{:db/id (uuid)
+                   :domain "https://accounts.google.com"
+                   :username "fuerstgivo"
+                   :password "56789"
+                   :user-id "kordano@topiq.es"
+                   :created-at (js/Date.)
+                   :expired (js/Date. 2014 7 29)}]
+                 [{:db/id (uuid)
+                   :domain "https://accounts.google.com"
+                   :username "konnykuehne"
+                   :password "123456"
+                   :user-id "kordano@topiq.es"
+                   :created-at (js/Date.)
+                   :expired (js/Date. 2014 7 29)}])
+         '(fn [old params] (:db-after (d/transact old params)))))
     (<! (s/commit! stage {"eve@tresor.net" {#uuid "11db6582-e734-4464-a710-6a2bfb502229" #{"master"}}})))
 
 
-  (let [db (get-in (-> @stage :volatile :val-atom deref)["eve@tresor.net"  #uuid "11db6582-e734-4464-a710-6a2bfb502229" "master"])
+  (let [db (get-in (-> @stage :volatile :val-atom deref) ["eve@tresor.net"  #uuid "11db6582-e734-4464-a710-6a2bfb502229" "master"])
         query  '[:find ?p ?domain ?username ?password ?user-id ?created-at ?expired
                  :where
                  [?p :domain ?domain]
@@ -199,4 +194,4 @@
   (-> @stage :volatile :val-atom deref)
 
 
-)
+ )
