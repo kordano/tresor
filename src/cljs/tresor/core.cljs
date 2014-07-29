@@ -83,9 +83,30 @@
                  [?p :created-at ?created-at]
                  [?p :expired ?expired]]]
     (mapv (partial zipmap [:id :domain :username :password :user-id :created-at :expired])
-         (d/q query db))))
+          (d/q query db))))
+
+(defn add-password [owner]
+  (let [stage (om/get-state owner :stage)
+        username (om/get-state owner :username-input-text)
+        domain (om/get-state owner :domain-input-text)
+        password (om/get-state owner :password-input-text)]
+    (go
+      (<! (s/transact
+           stage
+           ["eve@tresor.net" #uuid "11db6582-e734-4464-a710-6a2bfb502229" "master"]
+           [{:db/id (uuid)
+             :domain domain
+             :username username
+             :password password
+             :user-id (uuid "kordano@topiq.es")
+             :created-at (js/Date.)
+             :expired (js/Date. 2015 0 0)}]
+           '(fn [old params] (:db-after (d/transact old params)))))
+      (<! (s/commit! stage {"eve@tresor.net" {#uuid "11db6582-e734-4464-a710-6a2bfb502229" #{"master"}}})))))
 
 
+(defn handle-text-change [e owner text]
+  (om/set-state! owner text (.. e -target -value)))
 
 
 ;; --- html templating ---
@@ -94,26 +115,28 @@
   [pw owner]
   {[:.pw-domain] (content (:domain pw))
    [:.pw-username] (content (:username pw))
-   [:.pw-password] (content (:password pw))
+   [:.pw-password] (content (apply str (repeat (count (:password pw)) "*")))
    [:.pw-created-at] (content (.toLocaleString (:created-at pw)))
    [:.pw-expired] (content (.toLocaleString (:expired pw)))})
 
 
 (deftemplate passwords "templates/passwords.html"
-  [app owner]
-  {[:#password-list] (content (map #(password % owner) (get-passwords app)))})
+  [app owner state]
+  {[:#password-list] (content (map #(password % owner) (get-passwords app)))
+   [:#pw-domain-input] (do-> (set-attr :value (:domain-input-text state))
+                             (listen :on-change #(handle-text-change % owner :domain-input-text)))
+   [:#pw-username-input] (do-> (set-attr :value (:username-input-text state))
+                               (listen :on-change #(handle-text-change % owner :username-input-text)))
+   [:#pw-password-input] (do-> (set-attr :value (:password-input-text state))
+                               (listen :on-change #(handle-text-change % owner :password-input-text)))
+   [:#modal-new-pw-btn] (listen :on-click #(do
+                                             (add-password owner)
+                                             (om/set-state! owner :domain-input-text "")
+                                             (om/set-state! owner :username-input-text "")
+                                             (om/set-state! owner :password-input-text "")))})
 
 
 ;; --- views ---
-
-(defn password-view
-  "Main list view showing domain, account, password, creation and expiry date"
-  [app owner]
-  (reify
-    om/IRender
-    (render [this]
-      (passwords app owner))))
-
 
 ;; --- *hust* (start-all-services) *hust* ---
 
@@ -142,6 +165,20 @@
         (when (= (.getDomain uri) "localhost")
           (str ":" 8085 #_(.getPort uri)))
         "/geschichte/ws")))
+
+  (defn password-view
+    "Main list view showing domain, account, password, creation and expiry date"
+    [app owner]
+    (reify
+      om/IInitState
+      (init-state [_]
+        {:domain-input-text ""
+         :username-input-text ""
+         :stage stage
+         :password-input-text ""})
+      om/IRenderState
+      (render-state [this state]
+        (passwords app owner state))))
 
   (om/root
    password-view
@@ -191,6 +228,8 @@
   (-> @stage :volatile :peer deref :volatile :store :state deref)
 
   (-> @stage :volatile :val-atom deref)
+
+
 
 
  )
