@@ -116,6 +116,11 @@
 
 ;; --- html templating ---
 
+(deftemplate navbar "templates/navbar.html"
+  [app owner]
+  {[:#nav-input-field] (set-attr :placeholder "Search me ...")})
+
+
 (defsnippet password "templates/passwords.html" [:.pw-item]
   [pw owner]
   {[:.pw-domain] (content (:domain pw))
@@ -138,6 +143,7 @@
                                              (om/set-state! owner :url-input-text "")
                                              (om/set-state! owner :username-input-text "")
                                              (om/set-state! owner :password-input-text "")))})
+
 
 
 ;; --- views ---
@@ -183,6 +189,12 @@
       om/IRenderState
       (render-state [this state]
         (passwords app owner state))))
+
+  (om/root
+   #(navbar %1 %2)
+   (get-in @stage [:volatile :val-atom])
+   {:target (. js/document (getElementById "main-navbar"))})
+
 
   (om/root
    password-view
