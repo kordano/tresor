@@ -19,28 +19,11 @@
 
 (enable-console-print!)
 
-(println "ALL HAIL TO KONNY!")
+(println "ALL HAIL TO KORDANO!")
 
 (def uri (goog.Uri. js/location.href))
 
 (def ssl? (= (.getScheme uri) "https"))
-
-;; fire up repl
-#_(do
-    (ns weasel.startup)
-    (require 'weasel.repl.websocket)
-    (cemerick.piggieback/cljs-repl
-        :repl-env (weasel.repl.websocket/repl-env
-                   :ip "0.0.0.0" :port 17782)))
-
-
-;; weasel websocket
-(if (= "localhost" (.getDomain uri))
-  (do
-    (figw/watch-and-reload
-     ;; :websocket-url "ws://localhost:3449/figwheel-ws" default
-     :jsload-callback (fn [] (print "reloaded")))
-    (ws-repl/connect "ws://localhost:17782" :verbose true)))
 
 
 (def eval-fn {'(fn replace [old params] params) (fn replace [old params] params)
@@ -52,12 +35,6 @@
 (read/register-tag-parser! 'datascript/DB datascript/db-from-reader)
 (read/register-tag-parser! 'datascript/Datom datascript/datom-from-reader)
 
-
-(def trusted-hosts (atom #{:geschichte.stage/stage (.getDomain uri)}))
-
-(defn- auth-fn [users]
-  (go (js/alert (pr-str "AUTH-REQUIRED: " users))
-    {"eve@polyc0l0r.net" "lisp"}))
 
 
 ;; --- random string generator ---
@@ -207,43 +184,7 @@
 
 (comment
 
-  (go
-    (<! (s/transact
-         stage
-         ["eve@tresor.net" #uuid "11db6582-e734-4464-a710-6a2bfb502229" "master"]
-         (concat [{:db/id (uuid)
-                   :domain "https://accounts.google.com"
-                   :username "fuerstgivo"
-                   :password "56789"
-                   :user-id "kordano@topiq.es"
-                   :created-at (js/Date.)
-                   :expired (js/Date. 2014 7 29)}]
-                 [{:db/id (uuid)
-                   :domain "https://accounts.google.com"
-                   :username "konnykuehne"
-                   :password "123456"
-                   :user-id "kordano@topiq.es"
-                   :created-at (js/Date.)
-                   :expired (js/Date. 2014 7 29)}])
-         '(fn [old params] (:db-after (d/transact old params)))))
-    (<! (s/commit! stage {"eve@tresor.net" {#uuid "11db6582-e734-4464-a710-6a2bfb502229" #{"master"}}})))
 
 
-  (let [db (get-in (-> @stage :volatile :val-atom deref) ["eve@tresor.net"  #uuid "11db6582-e734-4464-a710-6a2bfb502229" "master"])
-        query  '[:find ?p ?domain ?username ?password ?url ?user-id ?created-at ?expired
-                 :where
-                 [?p :domain ?domain]
-                 [?p :username ?username]
-                 [?p :password ?password]
-                 [?p :url ?url]
-                 [?p :user-id ?user-id]
-                 [?p :created-at ?created-at]
-                 [?p :expired ?expired]]]
-    (map (partial zipmap [:id :domain :username :password :url :user-id :created-at :expired])
-         (d/q query db)))
-
-  (-> @stage :volatile :peer deref :volatile :store :state deref)
-
-  (-> @stage :volatile :val-atom deref)
 
  )
